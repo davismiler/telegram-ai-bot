@@ -2,13 +2,11 @@
 
 Этот проект представляет собой Telegram-бота, который интегрирует возможности искусственного интеллекта для улучшения взаимодействия с пользователем. Бот написан на Python и использует библиотеку `python-telegram-bot` для работы с Telegram API.
 
-
-
 ## Инструкции по установке
 
 1. **Клонируйте репозиторий:**
    ```
-   git clone https://github.com/yourusername/python-telegram-ai-bot.git
+   git clone https://github.com/labintsev/python-telegram-ai-bot.git
    cd python-telegram-ai-bot
    ```
 
