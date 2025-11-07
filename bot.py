@@ -1,21 +1,24 @@
 """
-Бот, который отвечает на сообщения в Telegram.
-Сначала определяются несколько функций-обработчиков.
-Затем эти функции передаются в приложение и регистрируются в соответствующих местах.
-После этого бот запускается и работает до тех пор, пока вы не нажмете Ctrl-C в командной строке.
+A Telegram bot that responds to user messages.
+
+First, several handler functions are defined.
+Then, these functions are registered in the application.
+After that, the bot starts running and continues until you stop it manually (Ctrl-C in the terminal).
 """
 
 import logging
 from logging.handlers import RotatingFileHandler
 import os
 
-# Настройка логирования: файл + вывод в консоль
+# --- Logging configuration: file + console output ---
 log_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 log_dir = os.path.join(os.path.dirname(__file__), "logs")
 os.makedirs(log_dir, exist_ok=True)
 log_file = os.path.join(log_dir, "bot.log")
 
-file_handler = RotatingFileHandler(log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
+file_handler = RotatingFileHandler(
+    log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+)
 file_handler.setFormatter(log_formatter)
 file_handler.setLevel(logging.DEBUG)
 
@@ -25,7 +28,7 @@ stream_handler.setLevel(logging.INFO)
 
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.DEBUG)
-# Удаляем возможные хендлеры, чтобы не дублировать вывод при повторном импорте
+# Remove any existing handlers to avoid duplicate logs on reimport
 if root_logger.handlers:
     root_logger.handlers.clear()
 root_logger.addHandler(file_handler)
@@ -33,10 +36,10 @@ root_logger.addHandler(stream_handler)
 
 logger = logging.getLogger(__name__)
 
-# Запрещаем propagate, чтобы сообщения не шли в root и не писались другими глобальными хендлерами
+# Disable propagation so messages don’t go to root logger again
 logger.propagate = False
 
-# Отключаем детальные логи библиотеки httpx
+# Reduce verbosity from httpx logs
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
@@ -52,19 +55,21 @@ from telegram.ext import (
 from model import chat_with_llm
 
 import dotenv
-# Загружаем переменные окружения из файла .env
+
+# --- Load environment variables from .env file ---
 try:
     env = dotenv.dotenv_values(".env")
     TELEGRAM_BOT_TOKEN = env["TELEGRAM_BOT_TOKEN"]
 except FileNotFoundError:
-    raise FileNotFoundError("Файл .env не найден. Убедитесь, что он существует в корневой директории проекта.")
+    raise FileNotFoundError("The .env file was not found. Make sure it exists in the project root directory.")
 except KeyError as e:
-    raise KeyError(f"Переменная окружения {str(e)} не найдена в файле .env. Проверьте его содержимое.")
+    raise KeyError(f"Environment variable {str(e)} not found in .env file. Please check its contents.")
 
 
-# Определим команды и функции-обработчики сообщений
+# --- Command and message handler definitions ---
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик команды /start. При старте бота пользователь получает приветственное сообщение."""
+    """Handler for the /start command. Sends a welcome message when the bot starts."""
     user = update.effective_user
     await update.message.reply_html(
         rf"Hi {user.mention_html()}!",
@@ -73,37 +78,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Основная функция для обработки текстовых сообщений от пользователя с целью ответа на них с помощью AI."""
+    """Main handler for processing user text messages using the AI model."""
     user_message = update.message.text
-    user = update.effective_user.first_name     
-    user_message = f'{user_message}. Имя пользователя: {user}'
-    # Получаем историю сообщений из context.chat_data
+    user = update.effective_user.first_name
+    user_message = f"{user_message}. Username: {user}"
+
+    # Retrieve message history from context.chat_data
     history = context.chat_data.get("history", [])
     logger.debug(f"History: {history}")
 
-    # Передаем текущий запрос и историю сообщений в llm_service
+    # Send the current user message and chat history to the LLM service
     llm_response = chat_with_llm(user_message, history=history)
-    context.chat_data["history"] = history  # сохраняем обновленную историю
+    context.chat_data["history"] = history  # Save updated history
     await update.message.reply_text(llm_response)
 
 
 def main() -> None:
-    """Функция инициализации бот-приложения."""
-    # Создание основного объекта приложения Telegram API
+    """Main function to initialize and run the Telegram bot application."""
+    # Create the main Telegram bot application
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
-    # Обработчик всех текстовых сообщений без команды
-    chat_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, chat)  
+    # Message handler for all non-command text messages
+    chat_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, chat)
 
-    # Регистрируем обработчики:
-    # Команда /start
+    # Register handlers
+    # Command: /start
     application.add_handler(CommandHandler("start", start))
-    # Все остальные текстовые сообщения обрабатываются chat_handler
+    # All other text messages handled by chat_handler
     application.add_handler(chat_handler)
 
-    # Запуск бота в режиме постоянного ожидания команд.
-    # Бот работает до прекращения программы (нажатие Ctrl-C или завершение по другому сигналу)
-    application.run_polling(allowed_updates=Update.ALL_TYPES)  
+    # Run the bot in polling mode
+    # The bot will continue running until manually stopped (Ctrl-C or a system signal)
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
